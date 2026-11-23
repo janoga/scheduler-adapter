@@ -1,0 +1,75 @@
+#!/usr/bin/env php
+<?php
+
+/*
+ * Demo only. Boots a throwaway Laravel application (the one Orchestra Testbench ships for tests),
+ * registers two tasks through the Scheduler contract and hands over to Laravel's console,
+ * so the usual commands work: migrate, schedule:list, schedule:run, schedule:work.
+ */
+
+declare(strict_types=1);
+
+use Illuminate\Contracts\Console\Kernel;
+use Janoga\Scheduling\Action\RunCommand;
+use Janoga\Scheduling\Action\RunJob;
+use Janoga\Scheduling\CronExpression;
+use Janoga\Scheduling\Job;
+use Janoga\Scheduling\Laravel\SchedulingServiceProvider;
+use Janoga\Scheduling\ScheduledTask;
+use Janoga\Scheduling\Scheduler;
+use Orchestra\Testbench\Foundation\Application;
+use Symfony\Component\Console\Input\ArgvInput;
+use Symfony\Component\Console\Output\ConsoleOutput;
+
+// Laravel starts scheduled commands as "php <this file> <command>" in a child process.
+define('ARTISAN_BINARY', __FILE__);
+
+require dirname(__DIR__).'/vendor/autoload.php';
+
+function demo_log(string $message): void
+{
+    file_put_contents(__DIR__.'/demo.log', sprintf("%s [pid %d] %s\n", date('H:i:s'), getmypid(), $message), FILE_APPEND);
+}
+
+final class Heartbeat implements Job
+{
+    public function handle(): void
+    {
+        demo_log('heartbeat job ran');
+    }
+}
+
+$app = Application::create(options: ['extra' => ['providers' => [SchedulingServiceProvider::class]]]);
+
+// Docker sets DB_CONNECTION=mysql. Without it the demo falls back to a local SQLite file.
+if (getenv('DB_CONNECTION') === false) {
+    touch(__DIR__.'/demo.sqlite');
+    $app->make('config')->set('database.default', 'sqlite');
+    $app->make('config')->set('database.connections.sqlite.database', __DIR__.'/demo.sqlite');
+}
+
+$kernel = $app->make(Kernel::class);
+
+$kernel->command('demo:slow-report {region} {--seconds=5}', function (): void {
+    demo_log("slow report for [{$this->argument('region')}] started");
+    sleep((int) $this->option('seconds'));
+    demo_log("slow report for [{$this->argument('region')}] finished");
+});
+
+$scheduler = $app->make(Scheduler::class);
+
+$scheduler->add(new ScheduledTask(
+    name: 'demo.heartbeat',
+    schedule: new CronExpression('* * * * *'),
+    action: new RunJob(Heartbeat::class),
+));
+
+// Takes 90 seconds but is due every minute: with the overlap lock every second run is skipped.
+$scheduler->add(new ScheduledTask(
+    name: 'demo.slow-report',
+    schedule: new CronExpression('* * * * *'),
+    action: new RunCommand('demo:slow-report', ['eu', '--seconds=90']),
+    overlapLockSeconds: 300,
+));
+
+exit($kernel->handle(new ArgvInput(), new ConsoleOutput()));

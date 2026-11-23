@@ -1,0 +1,42 @@
+{
+    "name": "janoga/scheduler-adapter",
+    "description": "Framework-neutral Scheduler and Mutex contracts with a Laravel adapter.",
+    "type": "library",
+    "require": {
+        "php": "^8.3",
+        "ext-pdo": "*",
+        "dragonmantank/cron-expression": "^3.4",
+        "illuminate/console": "^12.0",
+        "illuminate/contracts": "^12.0",
+        "illuminate/database": "^12.0",
+        "illuminate/support": "^12.0",
+        "psr/clock": "^1.0"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^10.0",
+        "phpunit/phpunit": "^11.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "Janoga\\Scheduling\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Janoga\\Scheduling\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Janoga\\Scheduling\\Laravel\\SchedulingServiceProvider"
+            ]
+        }
+    },
+    "scripts": {
+        "test": "phpunit"
+    },
+    "config": {
+        "sort-packages": true
+    }
+}
